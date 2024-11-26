@@ -537,6 +537,7 @@ NODE_CLASS_MAPPINGS = {
     "PulidFluxInsightFaceLoader": PulidFluxInsightFaceLoader,
     "PulidFluxEvaClipLoader": PulidFluxEvaClipLoader,
     "ApplyPulidFlux": ApplyPulidFlux,
+    "UnApplyPulidFlux": UnApplyPulidFlux,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -544,4 +545,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "PulidFluxInsightFaceLoader": "Load InsightFace (PuLID Flux)",
     "PulidFluxEvaClipLoader": "Load Eva Clip (PuLID Flux)",
     "ApplyPulidFlux": "Apply PuLID Flux",
+    "UnApplyPulidFlux": "UnApply PuLID Flux",
 }
