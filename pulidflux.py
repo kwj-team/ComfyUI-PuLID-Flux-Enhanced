@@ -1,3 +1,4 @@
+
 import torch
 from torch import nn, Tensor
 from torchvision import transforms
@@ -291,17 +292,17 @@ class UnApplyPulidFlux:
     
     def unapply_pulid_flux(self, model):
         flux_model = model.model.diffusion_model
-        if hasattr(flux_model, "pulid_ca"):
-            # Remove all PuLID related attributes
-            delattr(flux_model, "pulid_ca")
-            delattr(flux_model, "pulid_double_interval") 
-            delattr(flux_model, "pulid_single_interval")
-            delattr(flux_model, "pulid_data")
-            
-            # Restore original forward method
-            if hasattr(flux_model, "forward_orig"):
-                delattr(flux_model, "forward_orig")
+        if hasattr(flux_model, "pulid_data"):
+            # Clear out the existing PuLID data with zero-weight entries
+            flux_model.pulid_data = {key: {
+                'weight': 0.0,  # Set weight to zero
+                'embedding': torch.zeros_like(data['embedding']),  # Zero out embeddings
+                'sigma_start': data['sigma_start'],  # Preserve original sigma values
+                'sigma_end': data['sigma_end']
+            } for key, data in flux_model.pulid_data.items()}
                 
+        new_method = forward_orig.__get__(flux_model, flux_model.__class__)
+        setattr(flux_model, 'forward_orig', new_method)
         return (model,)
 
 class ApplyPulidFlux:
