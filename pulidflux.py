@@ -292,7 +292,7 @@ class UnApplyPulidFlux:
     
     def unapply_pulid_flux(self, model):
         flux_model = model.model.diffusion_model
-        if hasattr(flux_model, "pulid_data"):
+        if hasattr(flux_model, "pulid_ca"):
             # Clear out the existing PuLID data with zero-weight entries
             flux_model.pulid_data = {key: {
                 'weight': 0.0,  # Set weight to zero
@@ -300,9 +300,9 @@ class UnApplyPulidFlux:
                 'sigma_start': data['sigma_start'],  # Preserve original sigma values
                 'sigma_end': data['sigma_end']
             } for key, data in flux_model.pulid_data.items()}
-                
-        new_method = forward_orig.__get__(flux_model, flux_model.__class__)
-        setattr(flux_model, 'forward_orig', new_method)
+                    
+            new_method = forward_orig.__get__(flux_model, flux_model.__class__)
+            setattr(flux_model, 'forward_orig', new_method)
         return (model,)
 
 class ApplyPulidFlux:
