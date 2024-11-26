@@ -280,6 +280,28 @@ class PulidFluxEvaClipLoader:
             model["image_std"] = (eva_transform_std,) * 3
 
         return (model,)
+    
+class UnApplyPulidFlux:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"model": ("MODEL", )}}
+    
+    RETURN_TYPES = ("MODEL",)
+    FUNCTION = "unapply_pulid_flux"
+    CATEGORY = "pulid"
+    
+    def unapply_pulid_flux(self, model):
+        flux_model = model.model.diffusion_model
+        if hasattr(flux_model, "pulid_ca"):
+            # Reset to 0
+            for unique_id in flux_model.pulid_data:
+                flux_model.pulid_data[unique_id] = {
+                    'weight': 0,
+                    'embedding': 0,
+                    'sigma_start': 0,
+                    'sigma_end': 0,
+                }
+        return (model,)
 
 class ApplyPulidFlux:
     @classmethod
