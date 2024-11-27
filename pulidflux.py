@@ -1,4 +1,3 @@
-
 import torch
 from torch import nn, Tensor
 from torchvision import transforms
@@ -100,23 +99,21 @@ def forward_orig(
     ca_idx = 0
     blocks_replace = patches_replace.get("dit", {})
 
-    if self.pulid_data: 
-        # self.pulid_data.items() - makes all nodes executed, I want to execute one by one and repeat if all are executed
+    if self.pulid_data:
+        # Determine the next node to execute based on order
         nodeToExecute = None
-        # Sorted by order
         for node_id, node_data in sorted(self.pulid_data.items(), key=lambda x: x[1]["order"]):
             if not node_data["executed"]:
                 nodeToExecute = node_id
                 break
 
         if nodeToExecute is None:
-            # Reset all nodes
+            # Reset all nodes if all have been executed
             for node_id, node_data in self.pulid_data.items():
                 node_data["executed"] = False
-            
-        # First node by order
-        nodeToExecute = next(iter(sorted(self.pulid_data.items(), key=lambda x: x[1]["order"])))[0]
-    
+            # Re-select the first node to execute
+            nodeToExecute = next(iter(sorted(self.pulid_data.items(), key=lambda x: x[1]["order"])))[0]
+
     for i, block in enumerate(self.double_blocks):
         if ("double_block", i) in blocks_replace:
             def block_wrap(args):
