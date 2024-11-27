@@ -100,6 +100,21 @@ def forward_orig(
     ca_idx = 0
     blocks_replace = patches_replace.get("dit", {})
 
+    if self.pulid_data: 
+        # self.pulid_data.items() - makes all nodes executed, I want to execute one by one and repeat if all are executed
+        nodeToExecute = None
+        # Sorted by order
+        for node_id, node_data in sorted(self.pulid_data.items(), key=lambda x: x[1]["order"]):
+            if not node_data["executed"]:
+                nodeToExecute = node_id
+                break
+
+        if nodeToExecute is None:
+            # Reset all nodes
+            for node_id, node_data in self.pulid_data.items():
+                node_data["executed"] = False
+            nodeToExecute = self.pulid_data.items()[0][0]
+    
     for i, block in enumerate(self.double_blocks):
         if ("double_block", i) in blocks_replace:
             def block_wrap(args):
@@ -125,15 +140,14 @@ def forward_orig(
         # PuLID attention
         if self.pulid_data:
             if i % self.pulid_double_interval == 0:
-                # Will calculate influence of all pulid nodes at once
-                for _, node_data in self.pulid_data.items():
-                    condition_start = node_data['sigma_start'] >= timesteps
-                    condition_end = timesteps >= node_data['sigma_end']
-                    condition = torch.logical_and(
-                        condition_start, condition_end).all()
-                    
-                    if condition:
-                        img = img + node_data['weight'] * self.pulid_ca[ca_idx](node_data['embedding'], img)
+                # Will calculate influence of single node
+                node_data = self.pulid_data[nodeToExecute]
+                condition_start = node_data['sigma_start'] >= timesteps
+                condition_end = timesteps >= node_data['sigma_end']
+                condition = torch.logical_and(condition_start, condition_end).all()
+                
+                if condition:
+                    img = img + node_data['weight'] * self.pulid_ca[ca_idx](node_data['embedding'], img)
                 ca_idx += 1
 
     img = torch.cat((txt, img), 1)
@@ -153,18 +167,19 @@ def forward_orig(
         if self.pulid_data:
             real_img, txt = img[:, txt.shape[1]:, ...], img[:, :txt.shape[1], ...]
             if i % self.pulid_single_interval == 0:
-                # Will calculate influence of all nodes at once
-                for _, node_data in self.pulid_data.items():
-                    condition_start = node_data['sigma_start'] >= timesteps
-                    condition_end = timesteps >= node_data['sigma_end']
+                # Will calculate influence of single node
+                node_data = self.pulid_data[nodeToExecute]
+                condition_start = node_data['sigma_start'] >= timesteps
+                condition_end = timesteps >= node_data['sigma_end']
 
-                    # Combine conditions and reduce to a single boolean
-                    condition = torch.logical_and(condition_start, condition_end).all()
+                # Combine conditions and reduce to a single boolean
+                condition = torch.logical_and(condition_start, condition_end).all()
 
-                    if condition:
-                        real_img = real_img + node_data['weight'] * self.pulid_ca[ca_idx](node_data['embedding'], real_img)
+                if condition:
+                    real_img = real_img + node_data['weight'] * self.pulid_ca[ca_idx](node_data['embedding'], real_img)
                 ca_idx += 1
             img = torch.cat((txt, real_img), 1)
+            self.pulid_data[nodeToExecute]["executed"] = True
 
     img = img[:, txt.shape[1] :, ...]
 
@@ -490,12 +505,15 @@ class ApplyPulidFlux:
             new_method = forward_orig.__get__(flux_model, flux_model.__class__)
             setattr(flux_model, 'forward_orig', new_method)
 
+        order = len(flux_model.pulid_data)
         # Patch is already in place, add data (weight, embedding, sigma_start, sigma_end) under unique node index
         flux_model.pulid_data[unique_id] = {
             'weight': weight,
             'embedding': cond,
             'sigma_start': sigma_start,
             'sigma_end': sigma_end,
+            'executed': False,
+            'order': order,
         }
 
         # Keep a reference for destructor (if node is deleted the data will be deleted as well)
