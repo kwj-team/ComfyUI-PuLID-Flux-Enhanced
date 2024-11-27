@@ -113,7 +113,9 @@ def forward_orig(
             # Reset all nodes
             for node_id, node_data in self.pulid_data.items():
                 node_data["executed"] = False
-            nodeToExecute = self.pulid_data.items()[0][0]
+            
+        # First node by order
+        nodeToExecute = next(iter(sorted(self.pulid_data.items(), key=lambda x: x[1]["order"])))[0]
     
     for i, block in enumerate(self.double_blocks):
         if ("double_block", i) in blocks_replace:
