@@ -164,6 +164,7 @@ def forward_orig(
 
         # PuLID attention
         if self.pulid_data:
+            has_executed = False
             real_img, txt = img[:, txt.shape[1]:, ...], img[:, :txt.shape[1], ...]
             if i % self.pulid_single_interval == 0:
                 # Will calculate influence of single node
@@ -174,11 +175,17 @@ def forward_orig(
                 # Combine conditions and reduce to a single boolean
                 condition = torch.logical_and(condition_start, condition_end).all()
 
+                if not condition_end:
+                    has_executed = True
+
                 if condition:
                     real_img = real_img + node_data['weight'] * self.pulid_ca[ca_idx](node_data['embedding'], real_img)
                 ca_idx += 1
+
+            if has_executed:
+                self.pulid_data[nodeToExecute]["executed"] = True
+
             img = torch.cat((txt, real_img), 1)
-            self.pulid_data[nodeToExecute]["executed"] = True
 
     img = img[:, txt.shape[1] :, ...]
 
