@@ -1,4 +1,3 @@
-
 import torch
 from torch import nn, Tensor
 from torchvision import transforms
@@ -7,6 +6,8 @@ import os
 import logging
 import folder_paths
 import comfy.utils
+# Replace the manual patching with ModelPatcher usage
+import comfy.model_patcher  # Ensure ModelPatcher is accessible
 from comfy.ldm.flux.layers import timestep_embedding
 from insightface.app import FaceAnalysis
 from facexlib.parsing import init_parsing_model
@@ -316,7 +317,7 @@ class ApplyPulidFlux:
     def __init__(self):
         self.pulid_data_dict = None
 
-    def apply_pulid_flux(self, model, pulid_flux, eva_clip, face_analysis, image, weight, start_at, end_at, prior_image=None,fusion="mean", fusion_weight_max=1.0, fusion_weight_min=0.0, train_step=1000, use_gray=True, attn_mask=None, unique_id=None):
+    def apply_pulid_flux(self, model, pulid_flux, eva_clip, face_analysis, image, weight, start_at, end_at, prior_image=None, fusion="mean", fusion_weight_max=1.0, fusion_weight_min=0.0, train_step=1000, use_gray=True, attn_mask=None, unique_id=None):
         device = comfy.model_management.get_torch_device()
         # Why should I care what args say, when the unet model has a different dtype?!
         # Am I missing something?!
@@ -473,33 +474,32 @@ class ApplyPulidFlux:
         sigma_start = model.get_model_object("model_sampling").percent_to_sigma(start_at)
         sigma_end = model.get_model_object("model_sampling").percent_to_sigma(end_at)
 
-        # Patch the Flux model (original diffusion_model)
-        # Nah, I don't care for the official ModelPatcher because it's undocumented!
-        # I want the end result now, and I don’t mind if I break other custom nodes in the process. 😄
-        flux_model = model.model.diffusion_model
-        # Let's see if we already patched the underlying flux model, if not apply patch
-        if not hasattr(flux_model, "pulid_ca"):
-            # Add perceiver attention, variables and current node data (weight, embedding, sigma_start, sigma_end)
-            # The pulid_data is stored in Dict by unique node index,
-            # so we can chain multiple ApplyPulidFlux nodes!
-            flux_model.pulid_ca = pulid_flux.pulid_ca
-            flux_model.pulid_double_interval = pulid_flux.double_interval
-            flux_model.pulid_single_interval = pulid_flux.single_interval
-            flux_model.pulid_data = {}
-            # Replace model forward_orig with our own
-            new_method = forward_orig.__get__(flux_model, flux_model.__class__)
-            setattr(flux_model, 'forward_orig', new_method)
+        
+        # Create a ModelPatcher instance for the diffusion model
+        patcher = comfy.model_patcher.ModelPatcher(model.model.diffusion_model, load_device=device, offload_device=device)
+
+        # Define the custom forward method
+        def custom_forward(self, img, img_ids, txt, txt_ids, timesteps, y, guidance=None, control=None, transformer_options={}):
+            return forward_orig(self, img, img_ids, txt, txt_ids, timesteps, y, guidance, control, transformer_options)
+
+        # Apply the patch using ModelPatcher
+        patcher.add_patches({
+            'forward': custom_forward
+        })
+        patcher.patch_model()
 
         # Patch is already in place, add data (weight, embedding, sigma_start, sigma_end) under unique node index
-        flux_model.pulid_data[unique_id] = {
-            'weight': weight,
-            'embedding': cond,
-            'sigma_start': sigma_start,
-            'sigma_end': sigma_end,
-        }
+        patcher.add_patches({
+            'pulid_data': {
+                'weight': weight,
+                'embedding': cond,
+                'sigma_start': sigma_start,
+                'sigma_end': sigma_end,
+            }
+        })
 
         # Keep a reference for destructor (if node is deleted the data will be deleted as well)
-        self.pulid_data_dict = {'data': flux_model.pulid_data, 'unique_id': unique_id}
+        self.pulid_data_dict = {'data': patcher.model.pulid_data, 'unique_id': unique_id}
 
         return (model,)
 
